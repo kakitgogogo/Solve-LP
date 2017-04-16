@@ -6,11 +6,16 @@ int main(int argc, char* argv[])
 {
 	if(argc < 2) 
 	{
-		fprintf(stderr, "Usage: %s programfile", argv[0]);
+		fprintf(stderr, "Usage: %s programfile\n", argv[0]);
 		return 1;
 	}
 
 	auto lp = make_lp(argv[1]);
+	if(lp == NULL)
+	{
+		fprintf(stderr, "make_lp failed\n");
+		return 1;
+	}
 
 	vector<double> res;
 	int state = lp->solve(res);

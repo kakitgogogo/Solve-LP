@@ -245,11 +245,6 @@ shared_ptr<LP> make_lp(string filename)
 	vector<int> b;
 	vector<int> base;
 
-	unordered_map<string, int> RelationMap;
-	RelationMap["="] = 0;
-	RelationMap["<="] = RelationMap["<"] = 1;
-	RelationMap[">="] = RelationMap[">"] = -1;
-
 	target= get_line(fin);
 	for(int i = 3; i < target.size(); ++i)
 	{
@@ -289,6 +284,11 @@ shared_ptr<LP> make_lp(string filename)
 	}
 
 	M *= 100;
+
+	unordered_map<string, int> RelationMap;
+	RelationMap["="] = 0;
+	RelationMap["<="] = RelationMap["<"] = 1;
+	RelationMap[">="] = RelationMap[">"] = -1;
 
 	while((line = get_line(fin)).empty());
 	while(!line.empty())
