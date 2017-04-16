@@ -1,0 +1,11 @@
+# header
+max z = 5x1 +2x2
+
+# this is comment
+
+30x1 +20x2 <= 160
+5x1 +x2 <= 15
+# 5x1 +x2 <= 10
+x1 <= 4
+
+# end
