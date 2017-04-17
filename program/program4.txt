@@ -1,3 +1,4 @@
+#no solution
 max z = x1 +x2
 
 -2x1 +x2 <= 4

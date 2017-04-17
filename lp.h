@@ -155,7 +155,7 @@ int LP::step()
 	cout << endl;
 #endif
 
-	int pivot = Ab[row][col];
+	double pivot = Ab[row][col];
 	for(int i = 0; i < n; ++i)
 	{
 		Ab[row][i] /= pivot;
@@ -283,7 +283,7 @@ shared_ptr<LP> make_lp(string filename)
 		}
 	}
 
-	M *= 100;
+	M *= 1000;
 
 	unordered_map<string, int> RelationMap;
 	RelationMap["="] = 0;
