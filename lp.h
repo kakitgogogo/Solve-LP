@@ -11,6 +11,7 @@
 #include <cstring>
 #include <memory>
 #include <unordered_map>
+#include <assert.h>
 using namespace std;
 
 #define DEBUG_MODE 1
@@ -21,14 +22,24 @@ public:
 	enum 
 	{
 		MORE_ITERATION,
+		MORE_ITERATION_DUAL,
 		ONE_OPTIMAL_SOLUTION,
 		INFINITE_OPTIMAL_SOLUTION,
 		NO_OPTIMAL_SOLUTION,
 	};
 
+	enum
+	{
+		CHANGE_C,
+		CHANGE_B,
+		CHANGE_A,
+		ADD_XN,
+		ADD_RESTRAIN,
+	};
+
 	LP() {}
 
-	LP(vector<double> param, vector<vector<double> > restrain, vector<int>base): C(param), Ab(restrain), XB(base)
+	LP(vector<double> param, vector<vector<double> > restrain, vector<int>base): C(param), Ab(restrain), XB(base), Ab_Origin(restrain), XB_Origin(base)
 	{
 		m = restrain.size(); 
 		n = restrain[0].size();
@@ -37,22 +48,34 @@ public:
 		Theta.resize(m);
 
 		nstep = 0;
+		state = MORE_ITERATION;
 	}
 
 	int solve(vector<double>& res);
 
+	int update(int change_mode, const vector<double>& vec);
+	int update(int change_mode, const vector<vector<double> >& Anew);
+
 private:
 	int m, n;
 	int nstep;
+	int state;
 	vector<double> C;
 	vector<vector<double> > Ab;
 	vector<int> XB;
 	vector<double> Sigma;
 	vector<double> Theta;
 
+	vector<vector<double> > Ab_Origin;
+	vector<int> XB_Origin;
+
 	int cal_sigma();
 	int cal_theta(int col);
-	int step();
+	int iteration();
+	int iteration_dual();
+
+	int change_c(const vector<double>& c);
+	int change_b(const vector<double>& b);
 };
 
 int LP::cal_sigma()
@@ -113,17 +136,24 @@ int LP::cal_theta(int col)
 	return has_optimal_solution ? MORE_ITERATION : NO_OPTIMAL_SOLUTION;
 }
 
-int LP::step()
+int LP::iteration()
 {
-	int state, row = 0, col = 0;
+	int row = 0, col = 0;
 
 	++nstep;
+
 #if DEBUG_MODE
 	cout << "----------------- Intaration-" << nstep << " -----------------" << endl;
 #endif
 
 	state = cal_sigma();
-	if(state != 0) return state;
+	if(state != MORE_ITERATION) 
+	{
+#if DEBUG_MODE
+	cout << "--------------- Intaration-Finish ---------------" << endl;
+#endif		
+		return state;
+	}
 
 	for(int i = 0; i < n-1; ++i)
 	{
@@ -134,7 +164,13 @@ int LP::step()
 	}
 
 	state = cal_theta(col);
-	if(state != 0) return state;
+	if(state != MORE_ITERATION) 
+	{
+#if DEBUG_MODE
+	cout << "--------------- Intaration-Finish ---------------" << endl;
+#endif	
+		return state;
+	}
 
 	for(int i = 0; i < m; ++i)
 	{
@@ -186,11 +222,101 @@ int LP::step()
 	return MORE_ITERATION;
 }
 
+int LP::iteration_dual()
+{
+	int row = 0, col = 0;
+
+	++nstep;
+
+#if DEBUG_MODE
+	cout << "----------------- Intaration-" << nstep << " -----------------" << endl;
+#endif
+
+	for(int i = 0; i < m; ++i)
+	{
+		if(Ab[i].back() < 0)
+		{
+			state = MORE_ITERATION;
+			if(Ab[i].back() < Ab[row].back())
+			{
+				row = i;
+			}
+		}
+	}
+	if(state != MORE_ITERATION) 
+	{
+#if DEBUG_MODE
+	cout << "--------------- Intaration-Finish ---------------" << endl;
+#endif	
+		return state;
+	}
+
+	double min_ratio = 0;
+	for(int i = 0; i < n-1; ++i)
+	{
+		if(Ab[row][i] < 0 && Sigma[row]/Ab[row][i] < min_ratio)
+		{
+			col = i;
+			min_ratio = Sigma[row]/Ab[row][i];
+		}
+	}
+
+	XB[row] = col;
+
+#if DEBUG_MODE
+	cout << "XB: ";
+	for(int i = 0; i < m; ++i)
+	{
+		cout << XB[i] << " ";
+	}
+	cout << endl;
+#endif
+
+	double pivot = Ab[row][col];
+	for(int i = 0; i < n; ++i)
+	{
+		Ab[row][i] /= pivot;
+	}
+
+	for(int i = 0; i < m; ++i)
+	{
+		if(i == row) continue;
+		double multi = Ab[i][col];
+		for(int j = 0; j < n; ++j)
+		{
+			Ab[i][j] -= multi * Ab[row][j];
+		}
+	}
+
+	cal_sigma();
+
+#if DEBUG_MODE
+	cout << "Ab: " << endl;
+	for(int i = 0; i < m; ++i)
+	{
+		for(int j = 0; j < n; ++j)
+		{
+			cout << Ab[i][j] << " ";
+		}
+		cout << endl;
+	}
+#endif
+
+	return MORE_ITERATION;
+}
+
 int LP::solve(vector<double>& res)
 {
-	int state;
-	while((state = step()) == MORE_ITERATION);
-	if(state != ONE_OPTIMAL_SOLUTION) return state;
+	if(state == MORE_ITERATION) 
+	{
+		while((state = iteration()) == MORE_ITERATION);
+	}
+	else if(state == MORE_ITERATION_DUAL)
+	{
+		while((state = iteration_dual()) == MORE_ITERATION);
+	}
+
+	if(state == NO_OPTIMAL_SOLUTION) return state;
 
 	res.resize(n);
 	res[n-1] = -Sigma.back();
@@ -200,6 +326,68 @@ int LP::solve(vector<double>& res)
 	}
 	return state;
 } 
+
+/* -------------------- Sensitivity Analysis -------------------- */
+
+int LP::change_c(const vector<double>& c)
+{
+	assert(c.size() == n);
+
+	C = c;
+
+	for(int i = 0; i < n; ++i)
+	{
+		double d = 0;
+		for(int j = 0; j < m; ++j)
+		{
+			d += C[XB[j]] * Ab[j][i];
+		}
+		Sigma[i] = C[i] - d;
+		if(Sigma[i] > 0) state = MORE_ITERATION;
+	}
+
+	return state;
+}
+
+int LP::change_b(const vector<double>& b)
+{
+	assert(b.size() == m);
+
+	for(int i = 0; i < m; ++i)
+	{
+		Ab_Origin[i].back() = b[i];
+	}
+
+	for(int i = 0; i < m; ++i)
+	{
+		double d = 0;
+		for(int j = 0; j < XB_Origin.size(); ++j)
+		{
+			d += Ab[i][XB_Origin[j]] * Ab_Origin[j].back();
+		}
+		Ab[i].back() = d;
+		if(Ab[i].back() < 0) state = MORE_ITERATION_DUAL;
+	}
+
+	return state;
+}
+
+int LP::update(int change_mode, const vector<double>& vec)
+{
+	switch(change_mode)
+	{
+		case CHANGE_C:
+			state = change_c(vec);
+			break;
+		case CHANGE_B:
+			state = change_b(vec);
+			break;
+	}
+	return state;
+}
+
+
+/* --------------------- Read Program File --------------------- */
 
 static vector<string> get_line(FILE* fin)
 {
@@ -237,7 +425,7 @@ shared_ptr<LP> make_lp(string filename)
 	}
 
 	int max_index = 0, new_var_idx = 0;
-	double M;
+	double M, BigNum = (numeric_limits<double>::max)();
 	vector<string> target; 
 	vector<string> line;
 	vector<double> param;
@@ -283,8 +471,6 @@ shared_ptr<LP> make_lp(string filename)
 		}
 	}
 
-	M *= 1000;
-
 	unordered_map<string, int> RelationMap;
 	RelationMap["="] = 0;
 	RelationMap["<="] = RelationMap["<"] = 1;
@@ -321,6 +507,8 @@ shared_ptr<LP> make_lp(string filename)
 						pos = 1;
 					}
 					else c = stod(line[i], &pos);
+
+					M = max(M, fabs(c));
 
 					if(pos == line[i].size())
 					{
@@ -365,7 +553,7 @@ shared_ptr<LP> make_lp(string filename)
 			base.push_back(new_var_idx);
 
 			param.resize(new_var_idx+1);
-			param[new_var_idx++] = -M;
+			param[new_var_idx++] = BigNum;
 		}
 		else if(rel == -1)
 		{
@@ -376,12 +564,22 @@ shared_ptr<LP> make_lp(string filename)
 			base.push_back(new_var_idx);
 
 			param.resize(new_var_idx+1);
-			param[new_var_idx++] = -M;
+			param[new_var_idx++] = BigNum;
 		}
 
 		A.push_back(Arow);
 
 		line = get_line(fin);
+	}
+
+	fclose(fin);
+
+	M *= 100;
+
+	for(int i = 0; i < param.size(); ++i)
+	{
+		if(param[i] == BigNum) 
+			param[i] = -M;
 	}
 
 	for(int i = 0; i < A.size(); ++i)

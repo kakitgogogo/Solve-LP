@@ -20,15 +20,14 @@ int main(int argc, char* argv[])
 	vector<double> res;
 	int state = lp->solve(res);
 
-	if(state == LP::INFINITE_OPTIMAL_SOLUTION)
-	{
-		cout << "INFINITE_OPTIMAL_SOLUTION" << endl;
-		return 1;
-	}
 	if(state == LP::NO_OPTIMAL_SOLUTION)
 	{
 		cout << "NO_OPTIMAL_SOLUTION" << endl;
 		return 1;
+	}
+	if(state == LP::INFINITE_OPTIMAL_SOLUTION)
+	{
+		cout << "INFINITE_OPTIMAL_SOLUTION" << endl;
 	}
 
 	cout << "optimal solution: (";

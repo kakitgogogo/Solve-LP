@@ -38,7 +38,7 @@ void test_LP()
 void test_make_lp()
 {
 	cout << "==================== test-make_lp: ====================" << endl;
-	auto lp = make_lp("program.txt");
+	auto lp = make_lp("program/program0.txt");
 
 	vector<double> res;
 	int state = lp->solve(res);
@@ -63,8 +63,69 @@ void test_make_lp()
 	cout << "best result: " << res.back() << endl;
 }
 
+void test_mix()
+{
+	cout << "==================== test-mix: ====================" << endl;
+	cout << sizeof(LP) << endl;
+
+	auto lp = make_lp("program/program0.txt");
+
+	vector<double> res;
+	int n = 10, state;
+	while(n--) state = lp->solve(res);
+	cout << "best result: " << res.back() << endl;
+}
+
+void test_update_after_solve()
+{
+	cout << "==================== test-update_after_solve: ====================" << endl;
+	auto lp = make_lp("SensitivityAnalysis/program1.txt");
+
+	vector<double> res;
+	int state = lp->solve(res);
+	cout << "best result: " << res.back() << endl;
+
+	vector<double> c = {4, 2, 1, 0, 0, 0};
+	state = lp->update(LP::CHANGE_C, c);
+	cout << "state after update: " << state << endl;
+
+	state = lp->solve(res);
+	cout << "best result: " << res.back() << endl;
+}
+
+void test_update_before_solve()
+{
+	cout << "==================== test-update_before_solve: ====================" << endl;
+	auto lp = make_lp("SensitivityAnalysis/program1.txt");
+
+	vector<double> res;
+	vector<double> c = {4, 2, 1, 0, 0, 0};
+	int state = lp->update(LP::CHANGE_C, c);
+	cout << "state after update: " << state << endl;
+
+	state = lp->solve(res);
+	cout << "best result: " << res.back() << endl;
+}
+
+void test_change_b()
+{
+	cout << "==================== test-change_b: ====================" << endl;
+	auto lp = make_lp("SensitivityAnalysis/program2.txt");
+
+	vector<double> res;
+	vector<double> b = {3, 2, 3};
+	int state = lp->update(LP::CHANGE_B, b);
+
+	state = lp->solve(res);
+	cout << "best result: " << res.back() << endl;
+}
+
 int main()
 {
-	test_LP();
-	test_make_lp();
+	//test_LP();
+	//test_make_lp();
+	//test_mix();
+	test_update_after_solve();
+	test_update_before_solve();
+	test_change_b();
 }
