@@ -14,7 +14,7 @@
 #include <assert.h>
 using namespace std;
 
-#define DEBUG_MODE 1
+#define DEBUG_MODE 0
 
 class LP
 {
@@ -26,13 +26,14 @@ public:
 		ONE_OPTIMAL_SOLUTION,
 		INFINITE_OPTIMAL_SOLUTION,
 		NO_OPTIMAL_SOLUTION,
+		ADVISE_REBUILD_LP,
 	};
 
 	enum
 	{
 		CHANGE_C,
 		CHANGE_B,
-		CHANGE_A,
+		CHANGE_PK,
 		ADD_XN,
 		ADD_RESTRAIN,
 	};
@@ -54,7 +55,9 @@ public:
 	int solve(vector<double>& res);
 
 	int update(int change_mode, const vector<double>& vec);
-	int update(int change_mode, const vector<vector<double> >& Anew);
+	int update(int change_mode, int idx, const vector<double>& pk);
+
+	void showtab();
 
 private:
 	int m, n;
@@ -76,7 +79,33 @@ private:
 
 	int change_c(const vector<double>& c);
 	int change_b(const vector<double>& b);
+	int change_pk(int idx, const vector<double>& pk);
+	int add_xn(const vector<double>& pn);
+	int add_restrain(const vector<double>& am);
 };
+
+void LP::showtab()
+{
+	printf("Ab:\n");
+	for(int i = 0; i < m; ++i)
+	{
+		for(int j = 0; j < n; ++j)
+		{
+			printf("%10.3f", Ab[i][j]);
+		}
+		printf("\n");
+	}
+
+	printf("Sigma:\n");
+	for(int i = 0; i < n; ++i)
+		printf("%10.3f", Sigma[i]);
+	printf("\n");
+
+	printf("Best Base:\n");
+	for(int i = 0; i < m; ++i)
+		printf("%5d", XB[i]);
+	printf("\n");
+}
 
 int LP::cal_sigma()
 {
@@ -232,6 +261,7 @@ int LP::iteration_dual()
 	cout << "----------------- Intaration-" << nstep << " -----------------" << endl;
 #endif
 
+	state = ONE_OPTIMAL_SOLUTION;
 	for(int i = 0; i < m; ++i)
 	{
 		if(Ab[i].back() < 0)
@@ -248,16 +278,16 @@ int LP::iteration_dual()
 #if DEBUG_MODE
 	cout << "--------------- Intaration-Finish ---------------" << endl;
 #endif	
-		return state;
+		return cal_sigma();
 	}
 
-	double min_ratio = 0;
+	double min_ratio = (numeric_limits<double>::max)();
 	for(int i = 0; i < n-1; ++i)
 	{
-		if(Ab[row][i] < 0 && Sigma[row]/Ab[row][i] < min_ratio)
+		if(Ab[row][i] < 0 && Sigma[i] < 0 && Sigma[i]/Ab[row][i] < min_ratio)
 		{
 			col = i;
-			min_ratio = Sigma[row]/Ab[row][i];
+			min_ratio = Sigma[i]/Ab[row][i];
 		}
 	}
 
@@ -335,18 +365,7 @@ int LP::change_c(const vector<double>& c)
 
 	C = c;
 
-	for(int i = 0; i < n; ++i)
-	{
-		double d = 0;
-		for(int j = 0; j < m; ++j)
-		{
-			d += C[XB[j]] * Ab[j][i];
-		}
-		Sigma[i] = C[i] - d;
-		if(Sigma[i] > 0) state = MORE_ITERATION;
-	}
-
-	return state;
+	return cal_sigma();
 }
 
 int LP::change_b(const vector<double>& b)
@@ -372,6 +391,128 @@ int LP::change_b(const vector<double>& b)
 	return state;
 }
 
+int LP::change_pk(int idx, const vector<double>& pk)
+{
+	assert(pk.size() >= m && idx >= 0 && idx < n-1);
+
+	for(int i = 0; i < m; ++i)
+	{
+		if(idx == XB[i])
+		{
+			return ADVISE_REBUILD_LP;
+		}
+	}
+
+	for(int i = 0; i < m; ++i)
+	{
+		Ab_Origin[i][idx] = pk[i];
+	}
+
+	for(int i = 0; i < m; ++i)
+	{
+		double d = 0;
+		for(int j = 0; j < XB_Origin.size(); ++j)
+		{
+			d += Ab[i][XB_Origin[j]] * Ab_Origin[j][idx];
+		}
+		Ab[i][idx] = d;
+	}
+
+	return cal_sigma();
+}
+
+int LP::add_xn(const vector<double>& pn_and_cn)
+{
+	assert(pn_and_cn.size() == m+1);
+
+	n++;
+
+	for(int i = 0; i < m; ++i)
+	{
+		double tmp = Ab_Origin[i].back();
+		Ab_Origin[i].pop_back();
+		Ab_Origin[i].push_back(pn_and_cn[i]);
+		Ab_Origin[i].push_back(tmp);
+	}
+
+	for(int i = 0; i < m; ++i)
+	{
+		double d = 0;
+		for(int j = 0; j < XB_Origin.size(); ++j)
+		{
+			d += Ab[i][XB_Origin[j]] * Ab_Origin[j][n-2];
+		}
+
+		double tmp = Ab[i].back();
+		Ab[i].pop_back();
+		Ab[i].push_back(d);
+		Ab[i].push_back(tmp);
+	}
+
+	double tmp = C.back();
+	C.pop_back();
+	C.push_back(pn_and_cn.back());
+	C.push_back(tmp);
+
+	tmp = Sigma.back();
+	Sigma.pop_back();
+	Sigma.push_back(0);
+	Sigma.push_back(tmp);
+
+	return cal_sigma();
+}
+
+int LP::add_restrain(const vector<double>& am)
+{
+	assert(am.size() == n+1);
+
+	Ab_Origin.push_back(am);
+	Ab.push_back(am);
+	m++;
+	n++;
+
+	for(int i = 0; i < m-1; ++i)
+	{
+		double tmp = Ab_Origin[i].back();
+		Ab_Origin[i].pop_back();
+		Ab_Origin[i].push_back(0);
+		Ab_Origin[i].push_back(tmp);
+
+		tmp = Ab[i].back();
+		Ab[i].pop_back();
+		Ab[i].push_back(0);
+		Ab[i].push_back(tmp);
+	}
+
+	double tmp = C.back();
+	C.pop_back();
+	C.push_back(0);
+	C.push_back(tmp);
+
+	XB.push_back(n-2);
+
+	tmp = Sigma.back();
+	Sigma.pop_back();
+	Sigma.push_back(0);
+	Sigma.push_back(tmp);
+
+	for(int i = 0; i < m-1; ++i)
+	{
+		double multi = Ab[m-1][XB[i]];
+		for(int j = 0; j < n; ++j)
+		{
+			Ab[m-1][j] -= multi * Ab[i][j];
+		}
+	}
+
+	if(Ab[m-1].back() < 0) 
+	{
+		cal_sigma();
+		return MORE_ITERATION_DUAL;
+	}
+	else return cal_sigma();
+}
+
 int LP::update(int change_mode, const vector<double>& vec)
 {
 	switch(change_mode)
@@ -382,7 +523,22 @@ int LP::update(int change_mode, const vector<double>& vec)
 		case CHANGE_B:
 			state = change_b(vec);
 			break;
+		case ADD_XN:
+			state = add_xn(vec);
+			break;
+		case ADD_RESTRAIN:
+			state = add_restrain(vec);
+			break;
 	}
+	return state;
+}
+
+int LP::update(int change_mode, int idx, const vector<double>& vec)
+{
+	assert(change_mode == CHANGE_PK);
+
+	state = change_pk(idx, vec);
+
 	return state;
 }
 

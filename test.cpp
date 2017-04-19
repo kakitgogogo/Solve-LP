@@ -91,6 +91,13 @@ void test_update_after_solve()
 
 	state = lp->solve(res);
 	cout << "best result: " << res.back() << endl;
+
+	vector<double> c1 = {-1, 2, 1, 0, 0, 0};
+	state = lp->update(LP::CHANGE_C, c1);
+	cout << "state after update: " << state << endl;
+
+	state = lp->solve(res);
+	cout << "best result: " << res.back() << endl;
 }
 
 void test_update_before_solve()
@@ -120,12 +127,52 @@ void test_change_b()
 	cout << "best result: " << res.back() << endl;
 }
 
+void test_add_xn()
+{
+	cout << "==================== test-add_xn: ====================" << endl;
+	auto lp = make_lp("SensitivityAnalysis/program3.txt");
+
+	vector<double> res;
+	int state = lp->solve(res);
+	cout << "best result: " << res.back() << endl;
+
+	vector<double> pnc = {3, 1, -3, 3};
+	state = lp->update(LP::ADD_XN, pnc);
+
+	state = lp->solve(res);
+
+	cout << "state: " << state << endl;
+	cout << "best result: " << res.back() << endl;
+}
+
+void test_add_restrain()
+{
+	cout << "==================== test-add_restrain: ====================" << endl;
+	auto lp = make_lp("SensitivityAnalysis/program4.txt");
+
+	vector<double> res;
+	int state = lp->solve(res);
+	cout << "best result: " << res.back() << endl;
+
+	vector<double> an = {-3, 1, 6, 0, 0, 0, 1, 17};
+	state = lp->update(LP::ADD_RESTRAIN, an);
+
+	lp->showtab();
+
+	state = lp->solve(res);
+
+	cout << state << endl;
+	cout << "best result: " << res.back() << endl;
+}
+
 int main()
 {
 	//test_LP();
 	//test_make_lp();
 	//test_mix();
-	test_update_after_solve();
-	test_update_before_solve();
-	test_change_b();
+	//test_update_after_solve();
+	//test_update_before_solve();
+	//test_change_b();
+	test_add_xn();
+	test_add_restrain();
 }
